@@ -66,6 +66,16 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private mini: CanvasRenderingContext2D;
   private bg = mapImage();
+  private miniBg = (() => { // 小地圖底圖只縮一次
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const c = cv.getContext('2d')!;
+    c.imageSmoothingEnabled = true;
+    c.drawImage(this.bg, 0, 0, W, H);
+    return cv;
+  })();
+  private prev = new Map<number, Pt>();
+  private alpha = 1;
   private fx: Fx[] = [];
   private cam = new Director();
   private last = performance.now();
@@ -83,17 +93,31 @@ export class Renderer {
 
   collect(m: Match) { for (const ev of m.events) this.fx.push({ ev, born: m.t }); }
 
+  // 模擬每 0.1 秒一步；記下上一步的位置，畫面在兩步之間補間才不會一格一格跳
+  snapshot(m: Match) {
+    this.prev.clear();
+    for (const u of m.units) this.prev.set(u.id, { x: u.x, y: u.y });
+  }
+
+  private pos(u: Unit): Pt {
+    const p = this.prev.get(u.id);
+    if (!p || Math.abs(p.x - u.x) + Math.abs(p.y - u.y) > 30) return u; // 回城、復活直接瞬移
+    return { x: p.x + (u.x - p.x) * this.alpha, y: p.y + (u.y - p.y) * this.alpha };
+  }
+
   private sx(x: number) { return (x * S - this.cam.x) * this.cam.z + VIEW_W / 2; }
   private sy(y: number) { return (y * S - this.cam.y) * this.cam.z + VIEW_H / 2; }
 
-  draw(m: Match) {
+  draw(m: Match, alpha = 1) {
+    this.alpha = alpha;
     const now = performance.now();
     this.cam.update(m, Math.min(0.1, (now - this.last) / 1000));
     this.last = now;
     const ctx = this.ctx, z = this.cam.z;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#10131a'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.setTransform(z, 0, 0, z, VIEW_W / 2 - this.cam.x * z, VIEW_H / 2 - this.cam.y * z);
+    // 平移取整數像素，鏡頭移動時像素才不會抖
+    ctx.setTransform(z, 0, 0, z, Math.round(VIEW_W / 2 - this.cam.x * z), Math.round(VIEW_H / 2 - this.cam.y * z));
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.bg, 0, 0);
 
@@ -119,7 +143,8 @@ export class Renderer {
 
   private drawUnit(m: Match, u: Unit) {
     const ctx = this.ctx;
-    const px = Math.round(u.x * S), py = Math.round(u.y * S);
+    const at = this.pos(u);
+    const px = Math.round(at.x * S), py = Math.round(at.y * S);
     if (!u.alive) { // 廢墟
       ctx.fillStyle = '#3a3a44'; ctx.fillRect(px - 20, py - 8, 40, 12);
       ctx.fillStyle = '#5a5a66'; ctx.fillRect(px - 14, py - 14, 10, 8); ctx.fillRect(px + 4, py - 12, 8, 6);
@@ -205,7 +230,8 @@ export class Renderer {
     if (u.kind === 'minion' && u.hp >= u.maxHp) return;
     const ctx = this.ctx, z = this.cam.z;
     const { img, k } = this.spriteOf(m, u);
-    const x = this.sx(u.x), top = this.sy(u.y) - img.height * k * z - 6;
+    const at = this.pos(u);
+    const x = this.sx(at.x), top = this.sy(at.y) - img.height * k * z - 6;
     const w = u.kind === 'hero' ? 44 : u.kind === 'minion' ? 18 : u.kind === 'summon' ? 22 : 56;
     if (x < -60 || x > VIEW_W + 60 || top < -40 || top > VIEW_H + 40) return;
     ctx.fillStyle = '#111'; ctx.fillRect(x - w / 2 - 1, top - 1, w + 2, 7);
@@ -265,8 +291,7 @@ export class Renderer {
 
   private drawMinimap(m: Match) {
     const c = this.mini;
-    c.imageSmoothingEnabled = true;
-    c.drawImage(this.bg, 0, 0, W, H);
+    c.drawImage(this.miniBg, 0, 0);
     for (const u of m.units) {
       if (!u.alive && u.kind !== 'tower' && u.kind !== 'nexus') continue;
       c.fillStyle = !u.alive ? '#444' : u.team < 2 ? TEAM_COLOR[u.team] : '#ddd';

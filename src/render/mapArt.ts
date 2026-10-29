@@ -186,7 +186,14 @@ function placeProps(high: (x: number, y: number) => boolean): Prop[] {
   return props.sort((a, b) => a.p.y - b.p.y);
 }
 
+let cached: HTMLCanvasElement | null = null;
+
+// 生成一次約 0.6 秒，之後每場比賽共用
 export function mapImage() {
+  return (cached ??= buildMap());
+}
+
+function buildMap() {
   const cv = document.createElement('canvas');
   cv.width = W * S; cv.height = H * S;
   const ctx = cv.getContext('2d')!;

@@ -1,6 +1,7 @@
 import { HEROES, POS_NAMES, ROLE_NAMES } from './data/heroes';
 import { makeTeams, type Team } from './data/teams';
 import { aiChoose, apply, bestAssignment, isTaken, newDraft, ORDER, type Draft } from './draft';
+import { mapImage } from './render/mapArt';
 import { Renderer } from './render/renderer';
 import { heroSprite } from './render/sprites';
 import { DT, Match, type Pick } from './sim/match';
@@ -144,8 +145,8 @@ function matchScreen(picks: [Pick[], Pick[]]) {
     if (over) return;
     acc += Math.min(0.25, (now - last) / 1000) * speed;
     last = now;
-    while (acc >= DT && m.winner < 0) { m.step(); r.collect(m); acc -= DT; }
-    r.draw(m);
+    while (acc >= DT && m.winner < 0) { r.snapshot(m); m.step(); r.collect(m); acc -= DT; }
+    r.draw(m, Math.min(1, acc / DT));
     if (now - hudT > 250) { hud(); hudT = now; }
     if (m.winner >= 0) { hud(); setTimeout(finish, 1500); return; }
     requestAnimationFrame(frame);
@@ -166,3 +167,4 @@ function results(m: Match) {
 }
 
 title();
+setTimeout(mapImage, 50); // 趁玩家在 BP 時先把地圖畫好
