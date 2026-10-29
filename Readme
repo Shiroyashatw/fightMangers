@@ -1,1 +1,11 @@
-Readme
+團戰教練 — 5V5 電競教練模擬（像素風網頁遊戲）
+
+線上遊玩：https://shiroyashatw.github.io/fightMangers/
+
+本機執行：
+  npm install
+  npm run dev     # http://localhost:5173
+  npm test
+  npm run tune    # 不開畫面連跑多場，看比賽節奏
+
+設計：DESIGN.md　英雄：HEROES.md
